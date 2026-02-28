@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Subtraktive Farbmischung – Pigmente</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #080a0f;
+      color: #e8eaf0;
+      font-family: system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem 3rem;
+      gap: 2.5rem;
+    }
+
+    header { text-align: center; }
+
+    header h1 {
+      font-family: ui-monospace, 'Courier New', monospace;
+      font-size: clamp(1rem, 3vw, 1.5rem);
+      letter-spacing: 0.08em;
+      color: #ffffff;
+      text-transform: uppercase;
+    }
+
+    header p {
+      margin-top: 0.5rem;
+      font-size: 0.9rem;
+      color: #7a8090;
+      max-width: 480px;
+    }
+
+    /*
+      Der Canvas-Hintergrund ist weiß, weil subtraktive Mischung
+      von weißem Licht ausgeht, das durch Farbfilter/Pigmente
+      teilweise absorbiert wird.
+      Er ist quadratisch, aber ohne sichtbaren Rahmen.
+    */
+    .stage {
+      width: min(380px, 88vw);
+      height: min(380px, 88vw);
+      background: white;
+      flex-shrink: 0;
+    }
+
+    canvas { width: 100%; height: 100%; display: block; }
+
+    /* ── Steuerung ── */
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 1.4rem;
+      width: min(420px, 90vw);
+    }
+
+    .channel {
+      display: grid;
+      grid-template-columns: 3rem 1fr 4.5rem;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .channel-label {
+      font-family: ui-monospace, 'Courier New', monospace;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-align: center;
+      padding: 0.35rem 0.2rem;
+      border-radius: 5px;
+    }
+
+    .label-c { color: #00cccc; border: 1px solid #00cccc40; background: #00cccc0a; }
+    .label-m { color: #ee44aa; border: 1px solid #ee44aa40; background: #ee44aa0a; }
+    .label-y { color: #ddcc00; border: 1px solid #ddcc0040; background: #ddcc000a; }
+
+    /*
+      Zahleingabe mit Prozentzeichen – direkt editierbar.
+      44px min-height für Touch-Fläche (Apple-Richtlinie).
+    */
+    .num-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .num-input {
+      font-family: ui-monospace, 'Courier New', monospace;
+      font-size: 0.82rem;
+      color: #e0e4f0;
+      background: #12151f;
+      border: 1px solid #2a2d3a;
+      border-radius: 6px;
+      width: 100%;
+      min-height: 44px;
+      text-align: center;
+      padding: 0 1.2rem 0 0.3rem;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      -moz-appearance: textfield;
+    }
+    .num-input::-webkit-outer-spin-button,
+    .num-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+    .num-input:focus {
+      outline: none;
+      border-color: #4a5070;
+      box-shadow: 0 0 0 2px rgba(100,120,200,0.2);
+    }
+
+    .pct-sign {
+      position: absolute;
+      right: 0.5rem;
+      font-family: ui-monospace, 'Courier New', monospace;
+      font-size: 0.75rem;
+      color: #5a6070;
+      pointer-events: none;
+    }
+
+    /* Slider – direkt gestylt, Touch-fähig */
+    input[type=range] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 44px;
+      background: transparent;
+      cursor: pointer;
+      margin: 0; padding: 0;
+    }
+
+    input[type=range]::-webkit-slider-runnable-track {
+      height: 6px; border-radius: 3px; background: #1a1d28;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      margin-top: -11px;
+      border: 2px solid #2a2d3a;
+      cursor: grab;
+      transition: transform 0.1s;
+    }
+    input[type=range]:active::-webkit-slider-thumb { cursor: grabbing; transform: scale(1.15); }
+
+    input[type=range]::-moz-range-track {
+      height: 6px; border-radius: 3px; background: #1a1d28;
+    }
+    input[type=range]::-moz-range-thumb {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      border: 2px solid #2a2d3a;
+      cursor: grab;
+      transition: transform 0.1s;
+    }
+    input[type=range]:active::-moz-range-thumb { cursor: grabbing; transform: scale(1.15); }
+
+    #slider-c::-webkit-slider-thumb { background: #00aaaa; }
+    #slider-m::-webkit-slider-thumb { background: #cc3388; }
+    #slider-y::-webkit-slider-thumb { background: #bbaa00; }
+    #slider-c::-moz-range-thumb { background: #00aaaa; }
+    #slider-m::-moz-range-thumb { background: #cc3388; }
+    #slider-y::-moz-range-thumb { background: #bbaa00; }
+
+    /* ── Ergebnis ── */
+    .result-panel {
+      width: min(420px, 90vw);
+      background: #0d0f16;
+      border: 1px solid #1e2130;
+      border-radius: 12px;
+      padding: 1.2rem 1.4rem;
+      display: flex;
+      align-items: center;
+      gap: 1.2rem;
+    }
+
+    .result-swatch {
+      width: 54px; height: 54px;
+      border-radius: 8px;
+      flex-shrink: 0;
+      border: 1px solid #2a2d3a;
+      transition: background 0.1s, box-shadow 0.1s;
+    }
+
+    .result-info { display: flex; flex-direction: column; gap: 0.3rem; }
+
+    .result-label {
+      font-size: 0.72rem; color: #5a6070;
+      text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;
+    }
+
+    .result-hex {
+      font-family: ui-monospace, 'Courier New', monospace;
+      font-size: 1.05rem; color: #e0e4f0;
+    }
+
+    .result-name { font-size: 0.85rem; color: #9098b0; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Subtraktive Farbmischung</h1>
+    <p>Mische Pigmente durch Überlagerung von Cyan-, Magenta- und Gelbfiltern.</p>
+  </header>
+
+  <div class="stage">
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <div class="controls">
+    <div class="channel">
+      <span class="channel-label label-c">CYAN</span>
+      <input type="range"  id="slider-c" min="0" max="100" value="100" aria-label="Cyananteil">
+      <div class="num-wrap">
+        <input type="number" id="num-c" min="0" max="100" value="100" class="num-input" aria-label="Cyanwert eingeben">
+        <span class="pct-sign">%</span>
+      </div>
+    </div>
+    <div class="channel">
+      <span class="channel-label label-m">MAG.</span>
+      <input type="range"  id="slider-m" min="0" max="100" value="0" aria-label="Magentaanteil">
+      <div class="num-wrap">
+        <input type="number" id="num-m" min="0" max="100" value="0" class="num-input" aria-label="Magentawert eingeben">
+        <span class="pct-sign">%</span>
+      </div>
+    </div>
+    <div class="channel">
+      <span class="channel-label label-y">GELB</span>
+      <input type="range"  id="slider-y" min="0" max="100" value="0" aria-label="Gelbanteil">
+      <div class="num-wrap">
+        <input type="number" id="num-y" min="0" max="100" value="0" class="num-input" aria-label="Gelbwert eingeben">
+        <span class="pct-sign">%</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="result-panel">
+    <div class="result-swatch" id="swatch"></div>
+    <div class="result-info">
+      <span class="result-label">Mischfarbe</span>
+      <span class="result-hex"  id="hex-out">#00FFFF</span>
+      <span class="result-name" id="color-name">Cyan</span>
+    </div>
+  </div>
+
+<script>
+  const canvas = document.getElementById('canvas');
+  const ctx    = canvas.getContext('2d');
+
+  // Prozentwerte 0–100
+  let C = 100, M = 0, Y = 0;
+
+  function resize() {
+    const size = canvas.parentElement.offsetWidth;
+    canvas.width  = size;
+    canvas.height = size;
+    draw();
+  }
+
+  function draw() {
+    const W = canvas.width, H = canvas.height;
+    const cx = W/2, cy = H/2;
+    const radius = W * 0.30;
+    const offset = W * 0.14;
+
+    // Weißer Hintergrund – subtraktive Mischung geht von weißem Licht aus
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, W, H);
+
+    /*
+      Subtraktive Mischung mit 'multiply' Compositing:
+      Jeder Filter absorbiert einen Teil des Lichts.
+      Beim Überlagern multiplizieren sich die Transmissionswerte,
+      was physikalisch der Absorption von Licht durch Pigmente entspricht.
+
+      Farbe des Filters aus dem Prozentwert:
+        Cyan    absorbiert Rot   → rgb( 255*(1-C/100), 255, 255 )
+        Magenta absorbiert Grün  → rgb( 255, 255*(1-M/100), 255 )
+        Gelb    absorbiert Blau  → rgb( 255, 255, 255*(1-Y/100) )
+      Bei 0 % ist der Filter weiß (kein Pigment), bei 100 % die Vollfarbe.
+    */
+    ctx.globalCompositeOperation = 'multiply';
+
+    function drawFilter(x, y, r, g, b) {
+      // Kreis weglassen wenn Filter = weiß (kein Pigment), spart einen
+      // sichtbaren weißen Kreis auf weißem Hintergrund
+      if (r === 255 && g === 255 && b === 255) return;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+      ctx.fill();
+    }
+
+    const rC = Math.round(255 * (1 - C/100));
+    const gM = Math.round(255 * (1 - M/100));
+    const bY = Math.round(255 * (1 - Y/100));
+
+    drawFilter(cx,              cy - offset,      rC,  255, 255); // Cyan
+    drawFilter(cx - offset*0.9, cy + offset*0.6,  255, gM,  255); // Magenta
+    drawFilter(cx + offset*0.9, cy + offset*0.6,  255, 255, bY ); // Gelb
+
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  function toHex(v) { return v.toString(16).padStart(2,'0').toUpperCase(); }
+
+  /*
+    Ergebnisfarbe: CMY → RGB
+    R = 255 * (1 - C/100)
+    G = 255 * (1 - M/100)
+    B = 255 * (1 - Y/100)
+    Bei allen drei auf 100 % → Schwarz; bei allen 0 % → Weiß.
+  */
+  function getResultColor() {
+    return {
+      r: Math.round(255 * (1 - C/100)),
+      g: Math.round(255 * (1 - M/100)),
+      b: Math.round(255 * (1 - Y/100)),
+    };
+  }
+
+  function getColorName(r, g, b) {
+    if (r < 10 && g < 10 && b < 10) return 'Schwarz';
+    if (r > 245 && g > 245 && b > 245) return 'Weiß';
+    const m = Math.max(r,g,b), lo = 0.25, hi = 0.75;
+    const nr = r/255, ng = g/255, nb = b/255;
+    if (nr < lo && ng > hi && nb > hi) return 'Cyan';
+    if (nr > hi && ng < lo && nb > hi) return 'Magenta';
+    if (nr > hi && ng > hi && nb < lo) return 'Gelb';
+    if (nr < lo && ng < lo && nb > hi) return 'Blau';
+    if (nr > hi && ng < lo && nb < lo) return 'Rot';
+    if (nr < lo && ng > hi && nb < lo) return 'Grün';
+    return 'Mischfarbe';
+  }
+
+  function updateUI() {
+    const { r, g, b } = getResultColor();
+    const hex = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+    document.getElementById('hex-out').textContent    = hex;
+    document.getElementById('color-name').textContent = getColorName(r, g, b);
+    const swatch = document.getElementById('swatch');
+    swatch.style.background = hex;
+    draw();
+  }
+
+  function setupChannel(sliderId, numId, getVal, setVal) {
+    const slider = document.getElementById(sliderId);
+    const num    = document.getElementById(numId);
+
+    slider.addEventListener('input', () => {
+      const v = parseInt(slider.value);
+      num.value = v;
+      setVal(v);
+      updateUI();
+    });
+
+    num.addEventListener('input', () => {
+      let v = parseInt(num.value);
+      if (isNaN(v)) return;
+      v = Math.max(0, Math.min(100, v));
+      slider.value = v;
+      setVal(v);
+      updateUI();
+    });
+
+    num.addEventListener('change', () => {
+      let v = parseInt(num.value);
+      if (isNaN(v)) v = 0;
+      v = Math.max(0, Math.min(100, v));
+      num.value    = v;
+      slider.value = v;
+      setVal(v);
+      updateUI();
+    });
+  }
+
+  setupChannel('slider-c', 'num-c', ()=>C, v=>{ C=v; });
+  setupChannel('slider-m', 'num-m', ()=>M, v=>{ M=v; });
+  setupChannel('slider-y', 'num-y', ()=>Y, v=>{ Y=v; });
+
+  window.addEventListener('resize', resize);
+  resize();
+  updateUI();
+</script>
+</body>
+</html>
